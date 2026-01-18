@@ -21,99 +21,130 @@ html_content = """
         
         /* HEADER */
         header { 
-            background: rgba(0,0,0,0.9); 
-            backdrop-filter: blur(10px);
-            border-bottom: 2px solid var(--accent); 
-            padding: 15px; 
+            background: rgba(0,0,0,0.8); 
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255,255,255,0.1); 
+            padding: 20px; 
             text-align: center; 
             position: sticky;
             top: 0;
             z-index: 100;
         }
-        h1 { font-family: 'Oswald', sans-serif; font-size: 1.8rem; margin: 0; letter-spacing: 1px; }
+        h1 { font-family: 'Oswald', sans-serif; font-size: 1.8rem; margin: 0; letter-spacing: 2px; text-transform: uppercase; }
         h1 span { color: var(--accent); }
         
-        .container { max-width: 800px; margin: 0 auto; padding: 15px; }
-        .grid { display: grid; gap: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; padding: 20px; }
         
-        /* CARD DESIGN */
+        /* --- ANIMATED GRID --- */
+        .grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); 
+            gap: 25px; 
+        }
+        
+        /* --- INTERACTIVE CARD DESIGN --- */
         .card { 
-            background: var(--card-bg); 
-            border: 1px solid #222; 
-            border-radius: 8px;
-            overflow: hidden; 
-            display: flex; 
-            flex-direction: column; 
-            cursor: pointer;
-        }
-        .card:active { transform: scale(0.98); transition: 0.1s; }
-        
-        .card img { width: 100%; height: 180px; object-fit: cover; display: block; }
-        .card.no-image img { display: none; }
-        
-        .content { padding: 20px; }
-        
-        .meta { display: flex; justify-content: space-between; font-size: 0.7rem; font-weight: bold; margin-bottom: 10px; font-family: 'Oswald', sans-serif; }
-        .meta span.bsky { color: #3b82f6; } 
-        .meta span.std { color: var(--accent); } 
-        
-        h2 { margin: 0 0 10px 0; font-size: 1.1rem; line-height: 1.4; font-family: 'Inter', sans-serif; font-weight: 600;}
-        p { font-size: 0.9rem; color: var(--subtext); margin: 0; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-        
-        #loading { text-align: center; color: var(--accent); margin-top: 50px; font-family: 'Oswald', sans-serif; }
-        
-        /* --- MODAL (POPUP) DESIGN --- */
-        #modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.95);
-            z-index: 1000;
-            overflow-y: auto;
-            backdrop-filter: blur(5px);
-        }
-        
-        #modal-content {
-            max-width: 800px;
-            margin: 20px auto;
-            background: #111;
-            padding: 20px;
-            border-radius: 12px;
-            border: 1px solid #333;
             position: relative;
+            height: 400px; 
+            border-radius: 12px;
+            overflow: hidden; 
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            border: 1px solid #333;
+            
+            /* Initial Load Animation */
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+        }
+        
+        .card.visible { opacity: 1; transform: translateY(0); }
+
+        /* The Background Image */
+        .card img { 
+            width: 100%; 
+            height: 100%; 
+            object-fit: cover; 
+            transition: transform 0.5s ease;
+        }
+        .card:hover img { transform: scale(1.05); }
+
+        /* Gradient Overlay */
+        .card::after {
+            content: "";
+            position: absolute; inset: 0;
+            background: linear-gradient(to top, #000 10%, rgba(0,0,0,0.8) 50%, transparent 100%);
+        }
+
+        /* The Content Box (Title + Summary) */
+        .content { 
+            position: absolute; 
+            bottom: 0; left: 0; width: 100%; 
+            padding: 25px; box-sizing: border-box; 
+            z-index: 2; 
+            transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            transform: translateY(60px); /* Push summary down initially */
+        }
+
+        .card:hover .content { transform: translateY(0); }
+
+        .meta { 
+            font-size: 0.75rem; font-weight: bold; text-transform: uppercase; 
+            color: var(--accent); margin-bottom: 8px; font-family: 'Oswald', sans-serif; letter-spacing: 1px;
+        }
+        
+        h2 { 
+            margin: 0 0 10px 0; font-size: 1.4rem; line-height: 1.2; 
+            font-family: 'Oswald', sans-serif; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+        }
+        
+        p { 
+            font-size: 0.95rem; color: #ccc; margin: 0; line-height: 1.5;
+            display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+            opacity: 0; transition: opacity 0.4s ease 0.1s;
+        }
+        
+        .card:hover p { opacity: 1; }
+        
+        
+        /* --- MODAL (POPUP) --- */
+        #modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); z-index: 1000; overflow-y: auto;
+            backdrop-filter: blur(8px);
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        #modal-content {
+            max-width: 800px; margin: 40px auto; background: #111; padding: 0;
+            border-radius: 16px; border: 1px solid #333; position: relative;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
         }
         
         #close-btn {
-            position: absolute;
-            top: 15px; right: 15px;
-            background: #333; color: white;
-            border: none; border-radius: 50%;
-            width: 35px; height: 35px;
-            font-size: 20px; cursor: pointer;
-            z-index: 10;
+            position: absolute; top: 20px; right: 20px;
+            background: rgba(0,0,0,0.5); color: white; border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 50%; width: 40px; height: 40px; font-size: 24px; cursor: pointer; z-index: 10;
+            transition: 0.2s;
         }
+        #close-btn:hover { background: var(--accent); color: #000; border-color: var(--accent); }
         
-        #modal-img { width: 100%; height: auto; max-height: 400px; object-fit: cover; border-radius: 8px; margin-bottom: 20px; display: block;}
-        #modal-title { font-family: 'Oswald', sans-serif; font-size: 2rem; color: white; margin-bottom: 10px; line-height: 1.2; }
-        #modal-meta { color: var(--accent); font-size: 0.8rem; font-weight: bold; margin-bottom: 20px; text-transform: uppercase; }
+        #modal-img { width: 100%; height: 350px; object-fit: cover; border-top-left-radius: 16px; border-top-right-radius: 16px; }
         
-        #modal-body { 
-            font-size: 1.1rem; 
-            line-height: 1.8; 
-            color: #d4d4d8; 
-            margin-bottom: 30px; 
-            white-space: pre-wrap; 
-        }
+        #modal-text-container { padding: 30px; }
+        #modal-title { font-family: 'Oswald', sans-serif; font-size: 2.2rem; margin-top: 0; line-height: 1.1; }
+        #modal-body { font-size: 1.1rem; line-height: 1.8; color: #d4d4d8; margin-bottom: 30px; white-space: pre-wrap; }
 
-        .reader-status { font-style: italic; color: var(--accent); font-size: 0.9rem; margin-top: 10px; display: block; }
-        
         #modal-link-btn {
-            display: block; width: 100%; text-align: center;
-            background: var(--accent); color: #000;
-            padding: 15px; border-radius: 8px;
-            font-weight: bold; text-decoration: none;
-            text-transform: uppercase; font-family: 'Oswald', sans-serif;
+            display: block; width: 100%; text-align: center; background: var(--accent); color: #000;
+            padding: 16px; border-radius: 8px; font-weight: bold; text-decoration: none;
+            text-transform: uppercase; font-family: 'Oswald', sans-serif; letter-spacing: 1px;
+            transition: 0.2s;
         }
+        #modal-link-btn:hover { background: #fff; transform: translateY(-2px); }
+
+        #loading { text-align: center; color: var(--accent); margin-top: 50px; font-family: 'Oswald', sans-serif; letter-spacing: 2px; }
         
         #install-btn {
             display: none; position: fixed; bottom: 20px; left: 50%;
@@ -127,7 +158,7 @@ html_content = """
     <header><h1>GAME <span>NEWS</span></h1></header>
     
     <div class="container">
-        <div id="loading">FETCHING SOURCES...</div>
+        <div id="loading">INITIALIZING...</div>
         <div id="news-grid" class="grid"></div>
     </div>
     
@@ -139,7 +170,6 @@ html_content = """
             <img id="modal-img" src="" alt="">
             <div id="modal-text-container">
                 <h1 id="modal-title"></h1>
-                <div id="modal-meta"></div>
                 <div id="modal-body"></div> 
                 <a id="modal-link-btn" href="#" target="_blank">Read Full Story</a>
             </div>
@@ -147,14 +177,12 @@ html_content = """
     </div>
 
     <script>
-        // PWA INSTALL LOGIC
         let deferredPrompt;
         const installBtn = document.getElementById('install-btn');
         window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; installBtn.style.display = 'block'; });
         installBtn.addEventListener('click', () => { installBtn.style.display = 'none'; deferredPrompt.prompt(); });
         if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 
-        // SOURCES
         const feeds = [
             { name: "Wario64", url: "https://bsky.app/profile/wario64.bsky.social/rss", type: "bsky" },
             { name: "TheGameAwards", url: "https://bsky.app/profile/thegameawards.bsky.social/rss", type: "bsky" },
@@ -176,19 +204,18 @@ html_content = """
             const proxy = 'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(source.url);
             fetch(proxy).then(r => r.json()).then(data => {
                 if(data.items) {
-                    // FIX: We now grab the top 10 from EACH source (instead of 3)
-                    // This allows us to skip the "Pinned/Old" posts and find the fresh news hidden below.
                     data.items.slice(0, 10).forEach(item => {
                         
-                        // BASIC CLEANUP
+                        // SMART TEXT ENGINE (Safe Version)
                         let desc = item.description || "";
                         let cont = item.content || "";
                         let cleanDesc = desc.replace(/<[^>]*>?/gm, '').trim();
                         let cleanCont = cont.replace(/<[^>]*>?/gm, '').trim();
+                        
+                        // Pick the longest available text from the feed itself
                         let fullText = cleanCont.length > cleanDesc.length ? cleanCont : cleanDesc;
                         let gridText = fullText.length > 140 ? fullText.substring(0, 140) + "..." : fullText;
 
-                        // IMAGE LOGIC
                         let img = item.enclosure?.link || item.thumbnail;
                         let hasImage = true;
                         if (!img) {
@@ -212,7 +239,6 @@ html_content = """
             }).finally(() => {
                 completed++;
                 if(completed === feeds.length) {
-                    // FINAL SORT: STRICTLY BY DATE
                     allArticles.sort((a,b) => b.date - a.date);
                     loading.style.display = 'none';
                     renderGrid();
@@ -221,11 +247,7 @@ html_content = """
         });
 
         function renderGrid() {
-            // OPTIONAL: Limit the total grid to top 50 freshest items to keep it fast
-            // You can remove the .slice if you want infinite scrolling
-            const displayArticles = allArticles.slice(0, 50);
-
-            grid.innerHTML = displayArticles.map((a, index) => `
+            grid.innerHTML = allArticles.map((a, index) => `
                 <div class="card ${a.hasImage ? '' : 'no-image'}" onclick="openModal(${index})">
                     <img src="${a.image}">
                     <div class="content">
@@ -233,34 +255,33 @@ html_content = """
                             <span class="${a.type}">
                                 ${a.type === 'bsky' ? '🦋 ' + a.source : '📰 ' + a.source}
                             </span>
-                            <span>${timeAgo(a.date)}</span>
+                            • ${timeAgo(a.date)}
                         </div>
                         ${a.type !== 'bsky' ? `<h2>${a.title}</h2>` : ''}
                         <p>${a.gridText}</p>
                     </div>
                 </div>
             `).join('');
+
+            // TRIGGER ANIMATION
+            const cards = document.querySelectorAll('.card');
+            cards.forEach((card, i) => {
+                setTimeout(() => { card.classList.add('visible'); }, i * 100);
+            });
         }
 
         const modal = document.getElementById('modal-overlay');
         const modalImg = document.getElementById('modal-img');
         const modalTitle = document.getElementById('modal-title');
-        const modalMeta = document.getElementById('modal-meta');
         const modalBody = document.getElementById('modal-body');
         const modalBtn = document.getElementById('modal-link-btn');
 
         window.openModal = function(index) {
-            // Note: We use the *original* unsliced array index or match strictly
-            // But since we rendered 'displayArticles', we should grab from there.
-            // For simplicity in this logic, we just grab from allArticles[index] if sliced.
-            // Actually, let's just use the clicked object directly if possible, or simpler:
-            // The index passed here corresponds to the `displayArticles` array.
             const article = allArticles[index];
-            
             modalTitle.innerText = article.title;
             if(article.title === "Status Update") modalTitle.style.display = "none";
             else modalTitle.style.display = "block";
-            modalMeta.innerText = `${article.source} • ${timeAgo(article.date)}`;
+            
             modalBtn.href = article.link;
             
             if(article.hasImage) {
@@ -271,25 +292,7 @@ html_content = """
             }
 
             modalBody.innerHTML = article.fullText; 
-
-            // LIVE READER (Jina)
-            if(article.type === 'std') {
-                 modalBody.innerHTML += '<br><span class="reader-status">⚡ LIVE FETCH: Extracting full article...</span>';
-                 fetch('https://r.jina.ai/' + article.link)
-                    .then(r => r.text())
-                    .then(text => {
-                        if(text.length > 200) {
-                            modalBody.innerText = text; 
-                        } else {
-                            modalBody.innerHTML = article.fullText + '<br><br><i>(Full text could not be extracted automatically.)</i>';
-                        }
-                    })
-                    .catch(e => {
-                        console.log("Reader failed", e);
-                        modalBody.innerHTML = article.fullText;
-                    });
-            }
-
+            
             modal.style.display = "block";
             document.body.style.overflow = "hidden";
         }
@@ -298,10 +301,7 @@ html_content = """
             modal.style.display = "none";
             document.body.style.overflow = "auto";
         }
-
-        modal.addEventListener('click', function(e) {
-            if (e.target === modal) closeModal();
-        });
+        modal.addEventListener('click', function(e) { if (e.target === modal) closeModal(); });
 
         function timeAgo(date) {
             const seconds = Math.floor((new Date() - date) / 1000);
@@ -353,4 +353,4 @@ with open("manifest.json", "w", encoding="utf-8") as f:
 with open("sw.js", "w", encoding="utf-8") as f:
     f.write(sw_content)
 
-print("✅ Sorting Fixed: 10 Items per Source + Chronological Order!")
+print("✅ Stable Version Restored (Jina Removed)")
