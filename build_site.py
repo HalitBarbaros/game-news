@@ -97,14 +97,15 @@ html_content = """
         #modal-title { font-family: 'Oswald', sans-serif; font-size: 2rem; color: white; margin-bottom: 10px; line-height: 1.2; }
         #modal-meta { color: var(--accent); font-size: 0.8rem; font-weight: bold; margin-bottom: 20px; text-transform: uppercase; }
         
-        /* Updated Modal Body for Longer Text */
         #modal-body { 
             font-size: 1.1rem; 
             line-height: 1.8; 
             color: #d4d4d8; 
             margin-bottom: 30px; 
-            white-space: pre-line; /* Keeps paragraph breaks */
+            white-space: pre-wrap; 
         }
+
+        .reader-status { font-style: italic; color: var(--accent); font-size: 0.9rem; margin-top: 10px; display: block; }
         
         #modal-link-btn {
             display: block; width: 100%; text-align: center;
@@ -139,7 +140,7 @@ html_content = """
             <div id="modal-text-container">
                 <h1 id="modal-title"></h1>
                 <div id="modal-meta"></div>
-                <p id="modal-body"></p>
+                <div id="modal-body"></div> 
                 <a id="modal-link-btn" href="#" target="_blank">Read Full Story</a>
             </div>
         </div>
@@ -158,7 +159,6 @@ html_content = """
             { name: "Wario64", url: "https://bsky.app/profile/wario64.bsky.social/rss", type: "bsky" },
             { name: "TheGameAwards", url: "https://bsky.app/profile/thegameawards.bsky.social/rss", type: "bsky" },
             { name: "Jason Schreier", url: "https://bsky.app/profile/jasonschreier.bsky.social/rss", type: "bsky" },
-            { name: "Stephen Totilo", url: "https://bsky.app/profile/stephentotilo.bsky.social/rss", type: "bsky" },
             { name: "Gematsu", url: "https://gematsu.com/feed", type: "std" },
             { name: "VG247", url: "https://www.vg247.com/feed", type: "std" },
             { name: "Eurogamer", url: "https://www.eurogamer.net/feed", type: "std" },
@@ -176,28 +176,19 @@ html_content = """
             const proxy = 'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(source.url);
             fetch(proxy).then(r => r.json()).then(data => {
                 if(data.items) {
-                    data.items.slice(0, 3).forEach(item => {
+                    // FIX: We now grab the top 10 from EACH source (instead of 3)
+                    // This allows us to skip the "Pinned/Old" posts and find the fresh news hidden below.
+                    data.items.slice(0, 10).forEach(item => {
                         
-                        // --- THE "SMART TEXT" FIX ---
-                        // We fetch BOTH description and content
+                        // BASIC CLEANUP
                         let desc = item.description || "";
                         let cont = item.content || "";
-                        
-                        // We clean them both
                         let cleanDesc = desc.replace(/<[^>]*>?/gm, '').trim();
                         let cleanCont = cont.replace(/<[^>]*>?/gm, '').trim();
-                        
-                        // We pick whichever one is LONGER (More story!)
                         let fullText = cleanCont.length > cleanDesc.length ? cleanCont : cleanDesc;
-                        
-                        // If it's still too short, it means the website restricted it.
-                        if (fullText.length < 50) fullText = "Click 'Read Full Story' to view the original article.";
-
-                        // Versions
                         let gridText = fullText.length > 140 ? fullText.substring(0, 140) + "..." : fullText;
-                        let modalText = fullText.length > 4000 ? fullText.substring(0, 4000) + "..." : fullText;
 
-                        // Image Logic
+                        // IMAGE LOGIC
                         let img = item.enclosure?.link || item.thumbnail;
                         let hasImage = true;
                         if (!img) {
@@ -208,7 +199,7 @@ html_content = """
                         allArticles.push({
                             title: source.type === 'bsky' ? "Status Update" : item.title,
                             gridText: gridText,
-                            fullText: modalText, 
+                            fullText: fullText, 
                             link: item.link,
                             image: img,
                             hasImage: hasImage,
@@ -221,6 +212,7 @@ html_content = """
             }).finally(() => {
                 completed++;
                 if(completed === feeds.length) {
+                    // FINAL SORT: STRICTLY BY DATE
                     allArticles.sort((a,b) => b.date - a.date);
                     loading.style.display = 'none';
                     renderGrid();
@@ -229,7 +221,11 @@ html_content = """
         });
 
         function renderGrid() {
-            grid.innerHTML = allArticles.map((a, index) => `
+            // OPTIONAL: Limit the total grid to top 50 freshest items to keep it fast
+            // You can remove the .slice if you want infinite scrolling
+            const displayArticles = allArticles.slice(0, 50);
+
+            grid.innerHTML = displayArticles.map((a, index) => `
                 <div class="card ${a.hasImage ? '' : 'no-image'}" onclick="openModal(${index})">
                     <img src="${a.image}">
                     <div class="content">
@@ -254,14 +250,17 @@ html_content = """
         const modalBtn = document.getElementById('modal-link-btn');
 
         window.openModal = function(index) {
+            // Note: We use the *original* unsliced array index or match strictly
+            // But since we rendered 'displayArticles', we should grab from there.
+            // For simplicity in this logic, we just grab from allArticles[index] if sliced.
+            // Actually, let's just use the clicked object directly if possible, or simpler:
+            // The index passed here corresponds to the `displayArticles` array.
             const article = allArticles[index];
             
             modalTitle.innerText = article.title;
             if(article.title === "Status Update") modalTitle.style.display = "none";
             else modalTitle.style.display = "block";
-
             modalMeta.innerText = `${article.source} • ${timeAgo(article.date)}`;
-            modalBody.innerText = article.fullText; // Smart Text
             modalBtn.href = article.link;
             
             if(article.hasImage) {
@@ -269,6 +268,26 @@ html_content = """
                 modalImg.style.display = "block";
             } else {
                 modalImg.style.display = "none";
+            }
+
+            modalBody.innerHTML = article.fullText; 
+
+            // LIVE READER (Jina)
+            if(article.type === 'std') {
+                 modalBody.innerHTML += '<br><span class="reader-status">⚡ LIVE FETCH: Extracting full article...</span>';
+                 fetch('https://r.jina.ai/' + article.link)
+                    .then(r => r.text())
+                    .then(text => {
+                        if(text.length > 200) {
+                            modalBody.innerText = text; 
+                        } else {
+                            modalBody.innerHTML = article.fullText + '<br><br><i>(Full text could not be extracted automatically.)</i>';
+                        }
+                    })
+                    .catch(e => {
+                        console.log("Reader failed", e);
+                        modalBody.innerHTML = article.fullText;
+                    });
             }
 
             modal.style.display = "block";
@@ -334,4 +353,4 @@ with open("manifest.json", "w", encoding="utf-8") as f:
 with open("sw.js", "w", encoding="utf-8") as f:
     f.write(sw_content)
 
-print("✅ 'Smart Text' Logic Installed!")
+print("✅ Sorting Fixed: 10 Items per Source + Chronological Order!")
