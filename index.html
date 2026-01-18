@@ -4,292 +4,128 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Global Game News</title>
+    <title>Live Game News</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
         :root { --bg: #0f172a; --card-bg: #1e293b; --text: #f1f5f9; --accent: #38bdf8; --date: #94a3b8; }
         body { background-color: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; margin: 0; padding: 20px; }
         .container { max-width: 900px; margin: 0 auto; }
         
-        header { text-align: center; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 1px solid #334155; }
-        h1 { margin: 0; font-size: 2.5rem; background: linear-gradient(90deg, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .timestamp { color: var(--date); font-size: 0.9rem; margin-top: 10px; }
+        header { text-align: center; margin-bottom: 30px; border-bottom: 1px solid #334155; padding-bottom: 20px; }
+        h1 { margin: 0; font-size: 2rem; color: #38bdf8; }
+        .subtitle { color: var(--date); font-size: 0.9rem; margin-top: 5px; }
         
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+        #loading { text-align: center; font-size: 1.2rem; color: #fbbf24; margin-top: 50px; }
         
-        .card { background: var(--card-bg); border-radius: 12px; overflow: hidden; border: 1px solid #334155; transition: transform 0.2s; display: flex; flex-direction: column; }
-        .card:hover { transform: translateY(-5px); border-color: var(--accent); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; opacity: 0; transition: opacity 0.5s; }
+        .grid.loaded { opacity: 1; }
+        
+        .card { background: var(--card-bg); border-radius: 12px; overflow: hidden; border: 1px solid #334155; display: flex; flex-direction: column; }
+        .card:hover { border-color: var(--accent); transform: translateY(-3px); transition: 0.2s; }
         
         .card img { width: 100%; height: 160px; object-fit: cover; background: #000; }
+        .content { padding: 15px; flex-grow: 1; display: flex; flex-direction: column; }
+        .source { color: var(--accent); font-size: 0.75rem; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; }
+        h2 { font-size: 1.1rem; margin: 0 0 10px 0; line-height: 1.4; }
+        p { font-size: 0.85rem; color: #cbd5e1; flex-grow: 1; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
         
-        .content { padding: 20px; flex-grow: 1; display: flex; flex-direction: column; }
-        .source-tag { display: inline-block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-bottom: 8px; font-weight: bold; }
-        
-        h2 { margin: 0 0 10px 0; font-size: 1.1rem; line-height: 1.4; }
-        p { font-size: 0.9rem; color: #cbd5e1; line-height: 1.5; flex-grow: 1; margin-bottom: 20px; }
-        
-        a.btn { display: block; text-align: center; background: var(--accent); color: #0f172a; text-decoration: none; padding: 10px; border-radius: 6px; font-weight: bold; margin-top: auto; }
-        a.btn:hover { background: #7dd3fc; }
+        .date-tag { font-size: 0.7rem; color: #64748b; margin-top: 10px; text-align: right; }
+        a { text-decoration: none; color: inherit; display: block; height: 100%; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🌍 Global Game News</h1>
-            <div class="timestamp">Last Updated: January 18, 18:40 UTC</div>
-        </header>
+
+<div class="container">
+    <header>
+        <h1>⚡ Live Game News</h1>
+        <div class="subtitle">Updates automatically every time you refresh</div>
+    </header>
+
+    <div id="loading">Connecting to News Feeds...</div>
+    <div id="news-grid" class="grid"></div>
+</div>
+
+<script>
+    // 1. LIST OF FEEDS (Gematsu & VG247 are fastest for 'Twitter-like' news)
+    const feeds = [
+        { name: "Gematsu", url: "https://gematsu.com/feed" },
+        { name: "VG247", url: "https://www.vg247.com/feed" },
+        { name: "Eurogamer", url: "https://www.eurogamer.net/feed" },
+        { name: "IGN", url: "https://feeds.ign.com/ign/news" },
+        { name: "GameSpot", url: "https://www.gamespot.com/feeds/news/" }
+    ];
+
+    const grid = document.getElementById('news-grid');
+    const loading = document.getElementById('loading');
+    let allArticles = [];
+    let completedFeeds = 0;
+
+    // 2. FETCH FUNCTION (Runs in Browser)
+    feeds.forEach(source => {
+        // We use rss2json to bypass CORS blocks
+        const proxyUrl = 'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(source.url);
+
+        fetch(proxyUrl)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    data.items.slice(0, 4).forEach(item => { // Get top 4 from each
+                        allArticles.push({
+                            title: item.title,
+                            link: item.link,
+                            image: item.enclosure?.link || item.thumbnail || "https://placehold.co/600x400/1e293b/FFF?text=" + source.name,
+                            summary: item.description.replace(/<[^>]*>?/gm, '').substring(0, 150) + "...",
+                            source: source.name,
+                            date: new Date(item.pubDate)
+                        });
+                    });
+                }
+            })
+            .catch(err => console.log('Error fetching ' + source.name, err))
+            .finally(() => {
+                completedFeeds++;
+                if (completedFeeds === feeds.length) {
+                    renderNews();
+                }
+            });
+    });
+
+    function renderNews() {
+        // Sort by Newest First
+        allArticles.sort((a, b) => b.date - a.date);
+
+        loading.style.display = 'none';
+        grid.innerHTML = '';
         
-        <div class="grid">
-            
-<div class="card">
-    <img src="https://assets-prd.ignimgs.com/2022/05/17/rian-johnson-star-wars-trilogy-1652799426216.jpg" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">IGN</span>
-        <h2>‘Lol Zero Spooked, Sorry’ – Rian Johnson Responds to Kathleen Kennedy’s Suggestions That ‘Online Negativity’ Put The Last Jedi Director Off Making More Star Wars</h2>
-        <p>Rian Johnson has responded to Kathleen Kennedy’s suggestions that ‘Online Negativity’ put The Last Jedi director off making more Star Wars - ‘lol zero...</p>
-        <a href="https://www.ign.com/articles/lol-zero-spooked-sorry-rian-johnson-responds-to-kathleen-kennedys-suggestions-that-online-negativity-put-the-last-jedi-director-off-making-more-star-wars" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
+        allArticles.forEach(article => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = `
+                <a href="${article.link}" target="_blank">
+                    <img src="${article.image}" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=News'">
+                    <div class="content">
+                        <div class="source">${article.source}</div>
+                        <h2>${article.title}</h2>
+                        <p>${article.summary}</p>
+                        <div class="date-tag">${timeAgo(article.date)}</div>
+                    </div>
+                </a>
+            `;
+            grid.appendChild(card);
+        });
+        
+        grid.classList.add('loaded');
+    }
 
-<div class="card">
-    <img src="https://assets-prd.ignimgs.com/2025/12/16/fallout-s2e3-review-blogroll-1765902772410.jpg" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">IGN</span>
-        <h2>Fallout Season 2 Ratings Fall Well Below Season 1 as Prime Video Ditches Binge Strategy</h2>
-        <p>Fallout Season 2 ratings are down compared to the explosive debut of Season 1 – but there’s a good reason for that.</p>
-        <a href="https://www.ign.com/articles/fallout-season-2-ratings-fall-well-below-season-1-as-prime-video-ditches-binge-strategy" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
+    function timeAgo(date) {
+        const seconds = Math.floor((new Date() - date) / 1000);
+        let interval = seconds / 3600;
+        if (interval > 1) return Math.floor(interval) + " hours ago";
+        interval = seconds / 60;
+        if (interval > 1) return Math.floor(interval) + " minutes ago";
+        return "Just now";
+    }
+</script>
 
-<div class="card">
-    <img src="https://assets-prd.ignimgs.com/2026/01/16/speedy-gonzales-1768606724471.png" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">IGN</span>
-        <h2>Speedy Gonzales Movie Back in Development at Warner Bros. With New Director</h2>
-        <p>Speedy Gonzales is reportedly racing to the big screen with a new movie from director Jorge R. Gutiérrez.</p>
-        <a href="https://www.ign.com/articles/speedy-gonzales-movie-back-in-development-at-warner-bros-with-new-director" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
-
-<div class="card">
-    <img src="https://assets-prd.ignimgs.com/2026/01/16/20260114094200-01keyjkq7z95ztxng8btr3mfwh-1768598646369.jpg" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">IGN</span>
-        <h2>You Can't Invite Hotel Visitors to Move to Your Island in Animal Crossing: New Horizons, and We're All Bummed About It</h2>
-        <p>Animal Crossing: New Horizon's big 3.0 update is now live, and with it a bustling hotel where you can decorate rooms and attract villagers from the ga...</p>
-        <a href="https://www.ign.com/articles/you-cant-invite-hotel-visitors-to-move-to-your-island-in-animal-crossing-new-horizons-and-were-all-bummed-about-it" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
-
-<div class="card">
-    <img src="https://assetsio.gnwcdn.com/(567)-Grand-Theft-Auto-VI-Trailer-2-00-01-39.png?width=690&quality=85&format=jpg&auto=webp" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">Eurogamer</span>
-        <h2>Rockstar gives terminally ill fan early access to GTA 6</h2>
-        <p> Rockstar has helped a terminally ill fan play GTA 6 ahead of its November release date. Read more</p>
-        <a href="https://www.eurogamer.net/rockstar-gives-terminally-ill-fan-early-access-to-gta-6" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
-
-<div class="card">
-    <img src="https://assetsio.gnwcdn.com/pokemon-lego-header.jpg?width=690&quality=85&format=jpg&auto=webp" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">Eurogamer</span>
-        <h2>That Pokemon pricing might be eye-watering, but there's never been a better time to love Lego and gaming - in pretty much any price bracket</h2>
-        <p> It's quite the time to be somebody who loves both video games and Lego. In a sense, it perhaps shouldn't be surprising that the worlds of digital gam...</p>
-        <a href="https://www.eurogamer.net/that-pokemon-pricing-might-be-eye-watering-but-theres-never-been-a-better-time-to-love-lego-and-gaming-in-pretty-much-any-price-bracket" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
-
-<div class="card">
-    <img src="https://assetsio.gnwcdn.com/Leon-and-Grace-on-the-cover-of-Resident-Evil-Requiem.jpg?width=690&quality=85&format=jpg&auto=webp" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">Eurogamer</span>
-        <h2>Looks like Resident Evil Requiem isn't getting a collector's edition - but why?</h2>
-        <p> Earlier this week, Capcom pulled back the (rotting) curtain on the latest instalment of its storied horror series, Resident Evil. And while we learne...</p>
-        <a href="https://www.eurogamer.net/looks-like-resident-evil-requiem-isnt-getting-a-collectors-edition-but-why" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
-
-<div class="card">
-    <img src="https://assetsio.gnwcdn.com/Hytale_Tips_2.jpg?width=690&quality=85&format=jpg&auto=webp" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">Eurogamer</span>
-        <h2>Hytale's first update is here - here's what's new</h2>
-        <p> Hytale's first update is here, introducing a range of fixes and quality-of-life (QoL) improvements as the team promises it is "committed to maintaini...</p>
-        <a href="https://www.eurogamer.net/hytales-first-update-is-here-heres-whats-new" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
-
-<div class="card">
-    <img src="https://www.gamespot.com/a/uploads/screen_medium/1837/18375603/4636515-brunomarsbuildabrainrot.jpg" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">GameSpot</span>
-        <h2>Bruno Mars Is Performing A Roblox Steal A Brainrot Concert For One Day Only</h2>
-        <p>It's been 12 years since Bruno Mars performed at the Super Bowl XLVIII halftime show, but the musician has found a new big venue where he can sing wit...</p>
-        <a href="https://www.gamespot.com/articles/bruno-mars-is-performing-a-roblox-steal-a-brainrot-concert-for-one-day-only/1100-6537477/?ftag=CAD-01-10abi2f" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
-
-<div class="card">
-    <img src="https://www.gamespot.com/a/uploads/screen_medium/1837/18375603/4636510-battlefield6featured3.jpg" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">GameSpot</span>
-        <h2>Battlefield 6 Update Improves Jet Combat And Knife Attacks</h2>
-        <p>Earlier this week, Battlefield 6's Season 2 launch was pushed back to February 17 to give the development team more time to implement some needed chan...</p>
-        <a href="https://www.gamespot.com/articles/battlefield-6-update-improves-jet-combat-and-knife-attacks/1100-6537476/?ftag=CAD-01-10abi2f" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
-
-<div class="card">
-    <img src="https://www.gamespot.com/a/uploads/screen_medium/1595/15957481/4636469-4633952-acnhresorthotel.jpg" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">GameSpot</span>
-        <h2>Animal Crossing's 3.0 Update Just Killed Existing Hotel Businesses</h2>
-        <p>It’s a bad time to be in the Animal Crossing hotel business. New Horizons’ 3.0 update introduced a wave of new features, but one addition stands out a...</p>
-        <a href="https://www.gamespot.com/articles/animal-crossings-3-0-update-just-killed-existing-hotel-businesses/1100-6537470/?ftag=CAD-01-10abi2f" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
-
-<div class="card">
-    <img src="https://www.gamespot.com/a/uploads/screen_medium/1179/11799911/4636273-screenshot2026-01-16at11.54.12%E2%80%AFam.png" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">GameSpot</span>
-        <h2>Ryan Hurst Reacts To Being Cast As Kratos In God Of War TV Series</h2>
-        <p>Ryan Hurst was just recently announced as the actor who will play Kratos in the upcoming God of War live-action TV series. The Sons of Anarchy actor h...</p>
-        <a href="https://www.gamespot.com/articles/ryan-hurst-reacts-to-being-cast-as-kratos-in-god-of-war-tv-series/1100-6537458/?ftag=CAD-01-10abi2f" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
-
-<div class="card">
-    <img src="https://cdn.mos.cms.futurecdn.net/jVdBfAst9ExezoJhWQT6iR-1280-80.jpg" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">PC Gamer</span>
-        <h2>Once and for all, which game has the best art?</h2>
-        <p>Make your case PC gamers.</p>
-        <a href="https://www.pcgamer.com/games/once-and-for-all-which-game-has-the-best-art/" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
-
-<div class="card">
-    <img src="https://cdn.mos.cms.futurecdn.net/rM82tnmEj8YAXmxdvSPx3b-1280-80.jpg" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">PC Gamer</span>
-        <h2>FromSoftware-inspired RPG Lunacid is getting DLC, as its creator expresses bafflement at its success: 'This was supposed to be niche'</h2>
-        <p>The expansion is "about 70% done," though Kira LLC feels like "it's been at 70% forever."</p>
-        <a href="https://www.pcgamer.com/games/rpg/fromsoftware-inspired-rpg-lunacid-is-getting-dlc-as-its-creator-expresses-bafflement-at-its-success-this-was-supposed-to-be-niche/" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
-
-<div class="card">
-    <img src="https://cdn.mos.cms.futurecdn.net/hdEBMidQ8vRKaBaQJtXiFH-1280-80.jpg" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">PC Gamer</span>
-        <h2>Super Battle Golf improves the world's least interesting sport by letting you blast your competitors with orbital lasers</h2>
-        <p>Tees off in February.</p>
-        <a href="https://www.pcgamer.com/games/sports/super-battle-golf-improves-the-worlds-least-interesting-sport-by-letting-you-blast-your-competitors-with-orbital-lasers/" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
-
-<div class="card">
-    <img src="https://cdn.mos.cms.futurecdn.net/bXTmtiwZfdF5knU2jJtmtc-1280-80.png" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">PC Gamer</span>
-        <h2>You've got until Monday to get 80% off 2 of the best dungeon crawlers ever made</h2>
-        <p>Legend of Grimrock and its sequel are going cheap.</p>
-        <a href="https://www.pcgamer.com/games/rpg/youve-got-until-monday-to-get-80-percent-off-two-of-the-best-dungeon-crawlers-ever-made/" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
-
-<div class="card">
-    <img src="https://kotaku.com/app/uploads/2025/07/181b6bd0441bacbbf5bf0c60d646957f-1280x720.jpg" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">Kotaku</span>
-        <h2>Ex-Assassin’s Creed Boss Sues Ubisoft For Nearly $1 Million Over Alleged Forced Firing</h2>
-        <p>
-Marc-Alexis Côté was previously in charge of Ubisoft's biggest franchise
-The post Ex-&lt;i&gt;Assassin&#8217;s Creed&lt;/i&gt; Boss Sues Ubisoft For ...</p>
-        <a href="https://kotaku.com/assassins-creed-lawsuit-ubisoft-marc-alexis-cote-hexe-2000660833" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
-
-<div class="card">
-    <img src="https://kotaku.com/app/uploads/2026/01/Baby-steps-1280x722.jpg" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">Kotaku</span>
-        <h2>Awards Show Bravely Acknowledges Clair Obscur Wasn’t The Only Great Game Last Year</h2>
-        <p>
-Baby Steps deserves its flowers
-The post Awards Show Bravely Acknowledges &lt;i&gt;Clair Obscur&lt;/i&gt; Wasn&#8217;t The Only Great Game Last Year ...</p>
-        <a href="https://kotaku.com/baby-steps-awards-gdc-igf-2025-goty-2000660694" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
-
-<div class="card">
-    <img src="https://kotaku.com/app/uploads/2026/01/gamblertableindie-1280x720.jpg" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">Kotaku</span>
-        <h2>I Can’t Stop Flicking Coins And Hiring Tiny Dudes In This New Steam Game</h2>
-        <p>
-Gambler's Table is an idle game all about flipping many coins as fast and efficiently as possible
-The post I Can&#8217;t Stop Flicking Coins And Hiri...</p>
-        <a href="https://kotaku.com/i-cant-stop-flicking-coins-and-hiring-tiny-dudes-in-this-new-steam-game-2000660664" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
-
-<div class="card">
-    <img src="https://kotaku.com/app/uploads/2026/01/image-34-1280x748.jpg" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">Kotaku</span>
-        <h2>The Legend Of Zelda Movie Will Stream Exclusively On Netflix Once It Leaves Theaters</h2>
-        <p>
-Also: Nvidia RTX 5070 Ti isn't as dead as it sounds, at least according to Asus
-The post The &lt;i&gt;Legend Of Zelda&lt;/i&gt; Movie Will Stream Exc...</p>
-        <a href="https://kotaku.com/zelda-movie-netflix-streaming-trailer-release-date-2000660665" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
-
-<div class="card">
-    <img src="https://static0.polygonimages.com/wordpress/wp-content/uploads/2025/09/still-23-c-copyright_-c-koyoharu-gotoge-_-shueisha-aniplex-ufotable-1.jpg" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">Polygon</span>
-        <h2>Demon Slayer's head writer reveals how cornerstone of Japanese cinema inspired Infinity Castle</h2>
-        <p>How Akira Kurosawa’s Seven Samurai shaped Demon Slayer: Infinity Castle, inspiring Hikaru Kondo’s intense, high-stakes anime epic.</p>
-        <a href="https://www.polygon.com/demon-slayer-infinity-castle-seven-samurai-hikaru-kondo/" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
-
-<div class="card">
-    <img src="https://static0.polygonimages.com/wordpress/wp-content/uploads/2026/01/false-hydra-reddit.jpg" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">Polygon</span>
-        <h2>Why the False Hydra is D&D’s best homebrew monster — and why you can only run it once</h2>
-        <p>The False Hydra turns player forgetfulness into horror, making it one of the smartest and most memorable homebrew monsters in D&amp;D.</p>
-        <a href="https://www.polygon.com/false-hydra-dnd-monster-homebrew/" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
-
-<div class="card">
-    <img src="https://static0.polygonimages.com/wordpress/wp-content/uploads/chorus/uploads/chorus_asset/file/16219144/star_wars_logo1.jpg" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">Polygon</span>
-        <h2>Star Wars movies and TV shows: Every project and release date announced</h2>
-        <p>Star Wars’ movie and TV release calendar schedule through 2026, with every upcoming Star Wars project, from Rian Johnson’s trilogy to Star Wars: Skele...</p>
-        <a href="https://www.polygon.com/star-wars/23672528/star-wars-movies-tv-schedule-calendar-upcoming/" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
-
-<div class="card">
-    <img src="https://static0.polygonimages.com/wordpress/wp-content/uploads/2026/01/screen-shot-2026-01-16-at-11-25-56-am.jpg" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">Polygon</span>
-        <h2>We need more stupid cartoons like Two Stupid Dogs</h2>
-        <p>There's nothing quite like Two Stupid Dogs on TV today</p>
-        <a href="https://www.polygon.com/two-stupid-dogs-cartoon-reboot-revival/" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
-
-        </div>
-    </div>
 </body>
 </html>
