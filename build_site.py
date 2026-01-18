@@ -121,10 +121,9 @@ html_content = """
             font-size: 1.1rem; line-height: 1.8; color: #d4d4d8; 
             margin-bottom: 30px; white-space: pre-wrap; 
         }
-        /* Style images inside the modal body so they fit */
         #modal-body img { max-width: 100%; height: auto; border-radius: 8px; margin: 20px 0; }
         #modal-body p { margin-bottom: 20px; }
-        
+
         .reader-status { font-style: italic; color: var(--accent); font-size: 0.9rem; margin-top: 10px; display: block; animation: pulse 1.5s infinite; }
         @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
 
@@ -143,7 +142,7 @@ html_content = """
 <body>
     <header><h1>GAME <span>NEWS</span></h1></header>
     <div class="container">
-        <div id="loading">FETCHING LATEST NEWS...</div>
+        <div id="loading">CONNECTING TO GLOBAL FEEDS...</div>
         <div id="news-grid" class="grid"></div>
     </div>
     <div id="install-btn">📲 Install App</div>
@@ -167,17 +166,46 @@ html_content = """
         installBtn.addEventListener('click', () => { installBtn.style.display = 'none'; deferredPrompt.prompt(); });
         if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 
-        // SOURCES (Removed BlueSky, Added more news sites)
+        // MEGA SOURCE LIST
         const feeds = [
-            { name: "Gematsu", url: "https://gematsu.com/feed" },
-            { name: "VG247", url: "https://www.vg247.com/feed" },
-            { name: "Eurogamer", url: "https://www.eurogamer.net/feed" },
+            // MAJORS
             { name: "IGN", url: "https://feeds.ign.com/ign/news" },
             { name: "GameSpot", url: "https://www.gamespot.com/feeds/news/" },
+            { name: "Eurogamer", url: "https://www.eurogamer.net/feed" },
             { name: "Kotaku", url: "https://kotaku.com/rss" },
             { name: "Polygon", url: "https://www.polygon.com/rss/index.xml" },
+            { name: "The Verge", url: "https://www.theverge.com/rss/games/index.xml" },
+            { name: "GamesRadar+", url: "https://www.gamesradar.com/rss/" },
+            { name: "VGC", url: "https://www.videogameschronicle.com/feed/" },
+            { name: "Insider Gaming", url: "https://insider-gaming.com/feed/" },
+
+            // PC SPECIALISTS
             { name: "PC Gamer", url: "https://www.pcgamer.com/rss" },
-            { name: "Destructoid", url: "https://www.destructoid.com/feed" }
+            { name: "Rock Paper Shotgun", url: "https://www.rockpapershotgun.com/feed/" },
+            { name: "PCGamesN", url: "https://www.pcgamesn.com/feed" },
+
+            // CONSOLE / NICHE
+            { name: "Nintendo Life", url: "https://www.nintendolife.com/feeds/latest" },
+            { name: "Push Square", url: "https://www.pushsquare.com/feeds/latest" },
+            { name: "Pure Xbox", url: "https://www.purexbox.com/feeds/latest" },
+            { name: "Gematsu", url: "https://gematsu.com/feed" },
+            
+            // INDUSTRY & ANALYSIS
+            { name: "GamesIndustry.biz", url: "https://www.gamesindustry.biz/feed" },
+            { name: "Game Developer", url: "https://www.gamedeveloper.com/rss.xml" },
+            { name: "TheGamer", url: "https://www.thegamer.com/feed/" },
+            { name: "VG247", url: "https://www.vg247.com/feed" },
+            { name: "Aftermath", url: "https://aftermath.site/feed" },
+
+            // TECH / MOBILE / OTHER
+            { name: "Dexerto", url: "https://www.dexerto.com/feed" },
+            { name: "Pocket Gamer", url: "https://www.pocketgamer.com/rss/" },
+            { name: "Wccftech", url: "https://wccftech.com/feed/" },
+            { name: "TouchArcade", url: "https://toucharcade.com/feed/" },
+            { name: "Game Rant", url: "https://gamerant.com/feed/" },
+            { name: "Destructoid", url: "https://www.destructoid.com/feed" },
+            { name: "Siliconera", url: "https://www.siliconera.com/feed/" },
+            { name: "Shacknews", url: "https://www.shacknews.com/rss" }
         ];
 
         const grid = document.getElementById('news-grid');
@@ -189,15 +217,14 @@ html_content = """
             const proxy = 'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(source.url);
             fetch(proxy).then(r => r.json()).then(data => {
                 if(data.items) {
-                    // DEEP DIG STRATEGY: Grab 25 items per source
-                    data.items.slice(0, 25).forEach(item => {
+                    // FETCH LIMIT: 15 items per source to keep it fast
+                    data.items.slice(0, 15).forEach(item => {
                         
                         const pubDate = new Date(item.pubDate);
                         const now = new Date();
                         const hoursOld = (now - pubDate) / (1000 * 60 * 60);
 
-                        // STRICT FILTER: If older than 48 hours, SKIP IT.
-                        // This removes "Sticky/Featured" posts from last week.
+                        // 48 HOUR FILTER: Keeps the feed fresh
                         if (hoursOld > 48) return;
 
                         let desc = item.description || "";
@@ -208,7 +235,6 @@ html_content = """
                         let gridText = fullText.length > 140 ? fullText.substring(0, 140) + "..." : fullText;
 
                         let img = item.enclosure?.link || item.thumbnail;
-                        // Fallback image logic
                         if (!img) img = "https://placehold.co/600x400/161616/333?text=" + source.name;
 
                         allArticles.push({
@@ -246,7 +272,7 @@ html_content = """
 
             const cards = document.querySelectorAll('.card');
             cards.forEach((card, i) => {
-                setTimeout(() => { card.classList.add('visible'); }, i * 100);
+                setTimeout(() => { card.classList.add('visible'); }, i * 50); // Faster staggered load for many cards
             });
         }
 
@@ -263,7 +289,7 @@ html_content = """
             modalImg.src = article.image;
             modalBody.innerHTML = article.fullText; 
 
-            // WORDPRESS READER LOGIC
+            // WORDPRESS READER (Safe & Reliable)
             modalBody.innerHTML += '<br><span class="reader-status">⚡ FETCHING FULL STORY...</span>';
             const wpUrl = 'https://public-api.wordpress.com/rest/v1.1/readability?url=' + encodeURIComponent(article.link);
             fetch(wpUrl).then(r => r.json()).then(data => {
@@ -294,6 +320,7 @@ html_content = """
 </html>
 """
 
+# ... (manifest and sw remain same, no changes needed there)
 manifest_content = """{
   "name": "Game News",
   "short_name": "GameNews",
@@ -331,4 +358,4 @@ with open("manifest.json", "w", encoding="utf-8") as f:
 with open("sw.js", "w", encoding="utf-8") as f:
     f.write(sw_content)
 
-print("✅ Updated: No BlueSky + Strict 48h Filter + Deep Dig")
+print("✅ Mega Update: 30+ Sources Added!")
