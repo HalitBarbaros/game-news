@@ -42,7 +42,7 @@
             overflow: hidden; 
             display: flex; 
             flex-direction: column; 
-            cursor: pointer; /* Shows it is clickable */
+            cursor: pointer;
         }
         .card:active { transform: scale(0.98); transition: 0.1s; }
         
@@ -62,7 +62,7 @@
         
         /* --- MODAL (POPUP) DESIGN --- */
         #modal-overlay {
-            display: none; /* Hidden by default */
+            display: none;
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.95);
@@ -91,11 +91,18 @@
             z-index: 10;
         }
         
-        /* Modal Content Styles */
         #modal-img { width: 100%; height: auto; max-height: 400px; object-fit: cover; border-radius: 8px; margin-bottom: 20px; display: block;}
         #modal-title { font-family: 'Oswald', sans-serif; font-size: 2rem; color: white; margin-bottom: 10px; line-height: 1.2; }
         #modal-meta { color: var(--accent); font-size: 0.8rem; font-weight: bold; margin-bottom: 20px; text-transform: uppercase; }
-        #modal-body { font-size: 1.1rem; line-height: 1.6; color: #ccc; margin-bottom: 30px; white-space: pre-wrap; }
+        
+        /* Updated Modal Body for Longer Text */
+        #modal-body { 
+            font-size: 1.1rem; 
+            line-height: 1.8; /* Better readability */
+            color: #d4d4d8; 
+            margin-bottom: 30px; 
+            white-space: pre-line; /* Preserves paragraph breaks */
+        }
         
         #modal-link-btn {
             display: block; width: 100%; text-align: center;
@@ -105,7 +112,6 @@
             text-transform: uppercase; font-family: 'Oswald', sans-serif;
         }
         
-        /* Install Button */
         #install-btn {
             display: none; position: fixed; bottom: 20px; left: 50%;
             transform: translateX(-50%); background: var(--accent); color: #000;
@@ -161,7 +167,7 @@
 
         const grid = document.getElementById('news-grid');
         const loading = document.getElementById('loading');
-        let allArticles = []; // Store article data globally so Modal can access it
+        let allArticles = [];
         let completed = 0;
 
         feeds.forEach(source => {
@@ -169,11 +175,22 @@
             fetch(proxy).then(r => r.json()).then(data => {
                 if(data.items) {
                     data.items.slice(0, 3).forEach(item => {
-                        let cleanDesc = item.description.replace(/<[^>]*>?/gm, '');
-                        let limit = source.type === 'bsky' ? 300 : 140;
-                        // For modal, we want the FULL text if possible, but for grid we truncate
-                        let gridDesc = cleanDesc.length > limit ? cleanDesc.substring(0, limit) + "..." : cleanDesc;
                         
+                        // 1. GET FULL CONTENT
+                        // Some feeds store full text in 'content', others in 'description'
+                        let rawContent = item.content || item.description || "";
+                        
+                        // 2. CLEAN HTML TAGS
+                        let cleanText = rawContent.replace(/<[^>]*>?/gm, '');
+                        
+                        // 3. CREATE TWO VERSIONS
+                        // Version A: Grid (Short) - max 140 chars
+                        let gridText = cleanText.length > 140 ? cleanText.substring(0, 140) + "..." : cleanText;
+                        
+                        // Version B: Modal (Long) - max 3000 chars (approx 5-6 paragraphs)
+                        let modalText = cleanText.length > 3000 ? cleanText.substring(0, 3000) + "..." : cleanText;
+
+                        // 4. IMAGE LOGIC
                         let img = item.enclosure?.link || item.thumbnail;
                         let hasImage = true;
                         if (!img) {
@@ -183,8 +200,8 @@
 
                         allArticles.push({
                             title: source.type === 'bsky' ? "Status Update" : item.title,
-                            gridText: gridDesc,
-                            fullText: cleanDesc, // Store full text for modal
+                            gridText: gridText,
+                            fullText: modalText, // Now holds much more text
                             link: item.link,
                             image: img,
                             hasImage: hasImage,
@@ -222,7 +239,6 @@
             `).join('');
         }
 
-        // --- MODAL FUNCTIONS ---
         const modal = document.getElementById('modal-overlay');
         const modalImg = document.getElementById('modal-img');
         const modalTitle = document.getElementById('modal-title');
@@ -233,16 +249,14 @@
         window.openModal = function(index) {
             const article = allArticles[index];
             
-            // Populate Data
             modalTitle.innerText = article.title;
             if(article.title === "Status Update") modalTitle.style.display = "none";
             else modalTitle.style.display = "block";
 
             modalMeta.innerText = `${article.source} • ${timeAgo(article.date)}`;
-            modalBody.innerText = article.fullText; // Show more text in modal
+            modalBody.innerText = article.fullText; // This is now the LONG version
             modalBtn.href = article.link;
             
-            // Handle Image
             if(article.hasImage) {
                 modalImg.src = article.image;
                 modalImg.style.display = "block";
@@ -251,15 +265,14 @@
             }
 
             modal.style.display = "block";
-            document.body.style.overflow = "hidden"; // Prevent background scrolling
+            document.body.style.overflow = "hidden";
         }
 
         window.closeModal = function() {
             modal.style.display = "none";
-            document.body.style.overflow = "auto"; // Restore scrolling
+            document.body.style.overflow = "auto";
         }
 
-        // Close if clicking outside box
         modal.addEventListener('click', function(e) {
             if (e.target === modal) closeModal();
         });
