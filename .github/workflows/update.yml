@@ -31,7 +31,7 @@ jobs:
           python build_site.py
           ls -l index.html  # Verify file was created
 
-      - name: FORCE Commit and Push
+- name: FORCE Commit and Push
         run: |
           git config --global user.name 'NewsBot'
           git config --global user.email 'bot@noreply.github.com'
@@ -39,9 +39,8 @@ jobs:
           # Add the file
           git add index.html
           
-          # Commit (If no changes, this prevents error)
+          # Commit 
           git commit -m "Fresh News Update: $(date)" || echo "⚠️ No changes to commit"
           
-          # THE SECRET WEAPON: Force Push
-          # This overrides any 'conflict' errors
-          git push origin main
+          # THE FIX: Add --force to overwrite the conflict
+          git push origin main --force
