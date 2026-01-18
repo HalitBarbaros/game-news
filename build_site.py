@@ -1,45 +1,70 @@
 import feedparser
-from google import genai
-from google.genai import types
-import os
 import datetime
+import os
 
-# 1. SETUP
-API_KEY = os.environ.get("GEMINI_API_KEY")
-client = genai.Client(api_key=API_KEY)
+# 1. SOURCES
+# We can add as many as we want now because we aren't limited by AI costs!
+rss_feeds = [
+    "https://feeds.ign.com/ign/news",
+    "https://www.eurogamer.net/feed",
+    "https://www.gamespot.com/feeds/news/",
+    "https://www.pcgamer.com/rss",
+    "https://kotaku.com/rss",
+    "https://www.polygon.com/rss/index.xml"
+]
 
-# 2. SOURCE
-rss_feeds = ["https://store.steampowered.com/feeds/news.xml"]
+# 2. CONFIGURATION
+# Fake ID to prevent websites from blocking us
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+}
 
-# 3. HTML TEMPLATE
+# 3. HTML TEMPLATE (Modern Dark Mode)
 html_template = """
 <!DOCTYPE html>
-<html dir="rtl" lang="ar">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Game News</title>
-    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
+    <title>Global Game News</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
-        body {{ background-color: #121212; color: #ffffff; font-family: 'Tajawal', sans-serif; margin: 0; padding: 20px; }}
-        .container {{ max-width: 800px; margin: 0 auto; }}
-        h1 {{ text-align: center; color: #bb86fc; }}
-        .card {{ background: #1e1e1e; border-radius: 12px; margin-bottom: 25px; border: 1px solid #333; overflow: hidden; }}
-        .card img {{ width: 100%; height: 200px; object-fit: cover; }}
-        .card-content {{ padding: 20px; }}
-        .tag {{ display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; margin-bottom: 8px; }}
-        .tag.ar {{ background: #03dac6; color: #000; }} /* Arabic Success */
-        .tag.en {{ background: #cf6679; color: #000; }} /* English Fallback */
-        h2 {{ margin-top: 0; color: #fff; }}
-        ul {{ padding-right: 20px; color: #ccc; }}
-        a {{ display: block; text-align: center; background: #3700b3; color: white; text-decoration: none; padding: 10px; margin-top: 15px; border-radius: 6px; }}
+        :root {{ --bg: #0f172a; --card-bg: #1e293b; --text: #f1f5f9; --accent: #38bdf8; --date: #94a3b8; }}
+        body {{ background-color: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; margin: 0; padding: 20px; }}
+        .container {{ max-width: 900px; margin: 0 auto; }}
+        
+        header {{ text-align: center; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 1px solid #334155; }}
+        h1 {{ margin: 0; font-size: 2.5rem; background: linear-gradient(90deg, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }}
+        .timestamp {{ color: var(--date); font-size: 0.9rem; margin-top: 10px; }}
+        
+        .grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }}
+        
+        .card {{ background: var(--card-bg); border-radius: 12px; overflow: hidden; border: 1px solid #334155; transition: transform 0.2s; display: flex; flex-direction: column; }}
+        .card:hover {{ transform: translateY(-5px); border-color: var(--accent); }}
+        
+        .card img {{ width: 100%; height: 160px; object-fit: cover; background: #000; }}
+        
+        .content {{ padding: 20px; flex-grow: 1; display: flex; flex-direction: column; }}
+        .source-tag {{ display: inline-block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-bottom: 8px; font-weight: bold; }}
+        
+        h2 {{ margin: 0 0 10px 0; font-size: 1.1rem; line-height: 1.4; }}
+        p {{ font-size: 0.9rem; color: #cbd5e1; line-height: 1.5; flex-grow: 1; margin-bottom: 20px; }}
+        
+        a.btn {{ display: block; text-align: center; background: var(--accent); color: #0f172a; text-decoration: none; padding: 10px; border-radius: 6px; font-weight: bold; margin-top: auto; }}
+        a.btn:hover {{ background: #7dd3fc; }}
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🎮 أخبار الألعاب</h1>
-        <div style="text-align: center; color: #888; margin-bottom: 20px;">Updated: {date}</div>
-        {articles}
+        <header>
+            <h1>🌍 Global Game News</h1>
+            <div class="timestamp">Last Updated: {date}</div>
+        </header>
+        
+        <div class="grid">
+            {articles}
+        </div>
     </div>
 </body>
 </html>
@@ -47,84 +72,83 @@ html_template = """
 
 card_template = """
 <div class="card">
-    <img src="{image}" onerror="this.src='https://placehold.co/600x400/1e1e1e/FFF?text=Game+News'">
-    <div class="card-content">
-        <span class="tag {lang_class}">{lang_text}</span>
-        <h2>{headline}</h2>
-        {body}
-        <a href="{link}" target="_blank">Full Article</a>
+    <img src="{image}" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
+    <div class="content">
+        <span class="source-tag">{source}</span>
+        <h2>{title}</h2>
+        <p>{summary}</p>
+        <a href="{link}" class="btn" target="_blank">Read More</a>
     </div>
 </div>
 """
 
-def get_translation(title, summary):
-    prompt = f"""
-    Task: Translate video game news to Arabic.
-    1. Translate headline to Arabic.
-    2. Summarize content into 2 short bullet points.
-    English Title: {title}
-    English Content: {summary}
-    Output JSON: {{ "headline": "...", "bullets": "<li>...</li><li>...</li>" }}
-    """
-    try:
-        # Trying a standard model to be safe
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(response_mime_type="application/json")
-        )
-        return response.parsed
-    except:
-        return None
+def clean_summary(html_summary):
+    """Simple cleaner to remove HTML tags from summary"""
+    from re import sub
+    # Remove HTML tags
+    text = sub('<[^<]+?>', '', html_summary)
+    # Truncate
+    return text[:150] + "..." if len(text) > 150 else text
 
 def main():
     articles_html = ""
+    total_articles = 0
     
+    print("🚀 Starting Multi-Source Fetcher...")
+
     for feed_url in rss_feeds:
         try:
-            feed = feedparser.parse(feed_url)
-            for entry in feed.entries[:5]: # Top 5 articles
+            # Determine Source Name from URL (e.g., 'ign', 'gamespot')
+            source_name = "News"
+            if "ign" in feed_url: source_name = "IGN"
+            elif "eurogamer" in feed_url: source_name = "Eurogamer"
+            elif "gamespot" in feed_url: source_name = "GameSpot"
+            elif "pcgamer" in feed_url: source_name = "PC Gamer"
+            elif "kotaku" in feed_url: source_name = "Kotaku"
+            elif "polygon" in feed_url: source_name = "Polygon"
+
+            print(f"📥 Fetching: {source_name}...")
+            
+            # Request with headers to avoid blocks
+            feed = feedparser.parse(feed_url, request_headers=HEADERS)
+            
+            # Get top 4 stories from each site
+            for entry in feed.entries[:4]:
                 
-                # Image Logic
-                image_url = "https://placehold.co/600x400/1e1e1e/FFF?text=Game+News"
-                if 'media_content' in entry: image_url = entry.media_content[0]['url']
+                # Try to find an image
+                image_url = "https://placehold.co/600x400/1e293b/FFF?text=" + source_name
+                if 'media_content' in entry: 
+                    image_url = entry.media_content[0]['url']
+                elif 'media_thumbnail' in entry:
+                    image_url = entry.media_thumbnail[0]['url']
                 elif 'links' in entry:
-                     for l in entry.links:
-                         if l['type'].startswith('image'): image_url = l['href']; break
+                    for l in entry.links:
+                        if l['type'].startswith('image'): image_url = l['href']; break
+                
+                # Clean up summary
+                raw_summary = getattr(entry, 'summary', getattr(entry, 'description', ''))
+                clean_text = clean_summary(raw_summary)
 
-                content = getattr(entry, 'summary', getattr(entry, 'description', ''))
+                articles_html += card_template.format(
+                    image=image_url,
+                    source=source_name,
+                    title=entry.title,
+                    summary=clean_text,
+                    link=entry.link
+                )
+                total_articles += 1
                 
-                # Try Translating
-                trans = get_translation(entry.title, content)
-                
-                if trans:
-                    # SUCCESS: Show Arabic
-                    articles_html += card_template.format(
-                        image=image_url,
-                        lang_class="ar",
-                        lang_text="METERGEM (Translated)",
-                        headline=trans['headline'],
-                        body=f"<ul>{trans['bullets']}</ul>",
-                        link=entry.link
-                    )
-                else:
-                    # FAILURE: Show English (Fallback)
-                    articles_html += card_template.format(
-                        image=image_url,
-                        lang_class="en",
-                        lang_text="English (AI Unavailable)",
-                        headline=entry.title,
-                        body=f"<p dir='ltr'>{content[:200]}...</p>",
-                        link=entry.link
-                    )
         except Exception as e:
-            print(f"Feed Error: {e}")
+            print(f"⚠️ Error fetching {feed_url}: {e}")
 
-    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M UTC")
+    # Generate Final HTML
+    now = datetime.datetime.now().strftime("%B %d, %H:%M UTC")
     final_html = html_template.format(date=now, articles=articles_html)
     
     with open("index.html", "w", encoding="utf-8") as f:
         f.write(final_html)
+    
+    print(f"✅ Success! Generated {total_articles} articles from multiple sources.")
 
 if __name__ == "__main__":
     main()
