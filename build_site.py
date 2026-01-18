@@ -89,7 +89,6 @@ html_content = """
         }
         .card:hover p { opacity: 1; }
         
-        
         /* --- MODAL (POPUP) --- */
         #modal-overlay {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -118,15 +117,14 @@ html_content = """
         #modal-text-container { padding: 30px; }
         #modal-title { font-family: 'Oswald', sans-serif; font-size: 2.2rem; margin-top: 0; line-height: 1.1; }
         
-        /* The Article Body */
         #modal-body { 
             font-size: 1.1rem; line-height: 1.8; color: #d4d4d8; 
             margin-bottom: 30px; white-space: pre-wrap; 
         }
-        /* Make extracted images fit */
-        #modal-body img { max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0; }
-        #modal-body p { margin-bottom: 15px; }
-
+        /* Style images inside the modal body so they fit */
+        #modal-body img { max-width: 100%; height: auto; border-radius: 8px; margin: 20px 0; }
+        #modal-body p { margin-bottom: 20px; }
+        
         .reader-status { font-style: italic; color: var(--accent); font-size: 0.9rem; margin-top: 10px; display: block; animation: pulse 1.5s infinite; }
         @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
 
@@ -137,7 +135,7 @@ html_content = """
             transition: 0.2s;
         }
         #modal-link-btn:hover { background: #fff; transform: translateY(-2px); }
-        
+
         #loading { text-align: center; color: var(--accent); margin-top: 50px; font-family: 'Oswald', sans-serif; letter-spacing: 2px; }
         #install-btn { display: none; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #000; padding: 12px 24px; border-radius: 50px; font-weight: bold; box-shadow: 0 4px 12px rgba(250, 204, 21, 0.4); cursor: pointer; z-index: 900; }
     </style>
@@ -145,7 +143,7 @@ html_content = """
 <body>
     <header><h1>GAME <span>NEWS</span></h1></header>
     <div class="container">
-        <div id="loading">INITIALIZING...</div>
+        <div id="loading">FETCHING LATEST NEWS...</div>
         <div id="news-grid" class="grid"></div>
     </div>
     <div id="install-btn">📲 Install App</div>
@@ -169,16 +167,17 @@ html_content = """
         installBtn.addEventListener('click', () => { installBtn.style.display = 'none'; deferredPrompt.prompt(); });
         if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 
+        // SOURCES (Removed BlueSky, Added more news sites)
         const feeds = [
-            { name: "Wario64", url: "https://bsky.app/profile/wario64.bsky.social/rss", type: "bsky" },
-            { name: "TheGameAwards", url: "https://bsky.app/profile/thegameawards.bsky.social/rss", type: "bsky" },
-            { name: "Jason Schreier", url: "https://bsky.app/profile/jasonschreier.bsky.social/rss", type: "bsky" },
-            { name: "Gematsu", url: "https://gematsu.com/feed", type: "std" },
-            { name: "VG247", url: "https://www.vg247.com/feed", type: "std" },
-            { name: "Eurogamer", url: "https://www.eurogamer.net/feed", type: "std" },
-            { name: "IGN", url: "https://feeds.ign.com/ign/news", type: "std" },
-            { name: "GameSpot", url: "https://www.gamespot.com/feeds/news/", type: "std" },
-            { name: "Kotaku", url: "https://kotaku.com/rss", type: "std" }
+            { name: "Gematsu", url: "https://gematsu.com/feed" },
+            { name: "VG247", url: "https://www.vg247.com/feed" },
+            { name: "Eurogamer", url: "https://www.eurogamer.net/feed" },
+            { name: "IGN", url: "https://feeds.ign.com/ign/news" },
+            { name: "GameSpot", url: "https://www.gamespot.com/feeds/news/" },
+            { name: "Kotaku", url: "https://kotaku.com/rss" },
+            { name: "Polygon", url: "https://www.polygon.com/rss/index.xml" },
+            { name: "PC Gamer", url: "https://www.pcgamer.com/rss" },
+            { name: "Destructoid", url: "https://www.destructoid.com/feed" }
         ];
 
         const grid = document.getElementById('news-grid');
@@ -190,7 +189,17 @@ html_content = """
             const proxy = 'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(source.url);
             fetch(proxy).then(r => r.json()).then(data => {
                 if(data.items) {
-                    data.items.slice(0, 10).forEach(item => {
+                    // DEEP DIG STRATEGY: Grab 25 items per source
+                    data.items.slice(0, 25).forEach(item => {
+                        
+                        const pubDate = new Date(item.pubDate);
+                        const now = new Date();
+                        const hoursOld = (now - pubDate) / (1000 * 60 * 60);
+
+                        // STRICT FILTER: If older than 48 hours, SKIP IT.
+                        // This removes "Sticky/Featured" posts from last week.
+                        if (hoursOld > 48) return;
+
                         let desc = item.description || "";
                         let cont = item.content || "";
                         let cleanDesc = desc.replace(/<[^>]*>?/gm, '').trim();
@@ -199,22 +208,17 @@ html_content = """
                         let gridText = fullText.length > 140 ? fullText.substring(0, 140) + "..." : fullText;
 
                         let img = item.enclosure?.link || item.thumbnail;
-                        let hasImage = true;
-                        if (!img) {
-                            if (source.type === 'bsky') { hasImage = false; img = ""; } 
-                            else { img = "https://placehold.co/600x400/161616/333?text=" + source.name; }
-                        }
+                        // Fallback image logic
+                        if (!img) img = "https://placehold.co/600x400/161616/333?text=" + source.name;
 
                         allArticles.push({
-                            title: source.type === 'bsky' ? "Status Update" : item.title,
+                            title: item.title,
                             gridText: gridText,
                             fullText: fullText, 
                             link: item.link,
                             image: img,
-                            hasImage: hasImage,
                             source: source.name,
-                            type: source.type,
-                            date: new Date(item.pubDate)
+                            date: pubDate
                         });
                     });
                 }
@@ -230,16 +234,11 @@ html_content = """
 
         function renderGrid() {
             grid.innerHTML = allArticles.map((a, index) => `
-                <div class="card ${a.hasImage ? '' : 'no-image'}" onclick="openModal(${index})">
+                <div class="card" onclick="openModal(${index})">
                     <img src="${a.image}">
                     <div class="content">
-                        <div class="meta">
-                            <span class="${a.type}">
-                                ${a.type === 'bsky' ? '🦋 ' + a.source : '📰 ' + a.source}
-                            </span>
-                            • ${timeAgo(a.date)}
-                        </div>
-                        ${a.type !== 'bsky' ? `<h2>${a.title}</h2>` : ''}
+                        <div class="meta">${a.source} • ${timeAgo(a.date)}</div>
+                        <h2>${a.title}</h2>
                         <p>${a.gridText}</p>
                     </div>
                 </div>
@@ -260,42 +259,18 @@ html_content = """
         window.openModal = function(index) {
             const article = allArticles[index];
             modalTitle.innerText = article.title;
-            if(article.title === "Status Update") modalTitle.style.display = "none";
-            else modalTitle.style.display = "block";
             modalBtn.href = article.link;
-            
-            if(article.hasImage) {
-                modalImg.src = article.image;
-                modalImg.style.display = "block";
-            } else {
-                modalImg.style.display = "none";
-            }
-
-            // 1. Show the "Short" text immediately
+            modalImg.src = article.image;
             modalBody.innerHTML = article.fullText; 
 
-            // 2. TRIGGER WORDPRESS READABILITY (The new Jina replacement)
-            if(article.type === 'std') {
-                 modalBody.innerHTML += '<br><span class="reader-status">⚡ FETCHING FULL STORY...</span>';
-                 
-                 // Using the Wordpress Public Readability API
-                 const wpUrl = 'https://public-api.wordpress.com/rest/v1.1/readability?url=' + encodeURIComponent(article.link);
-                 
-                 fetch(wpUrl)
-                    .then(r => r.json())
-                    .then(data => {
-                        if(data.content) {
-                            // Success! We replace the body with the full HTML content
-                            modalBody.innerHTML = data.content; 
-                        } else {
-                            modalBody.innerHTML = article.fullText + '<br><br><i>(Full text not available via Reader. Click button below.)</i>';
-                        }
-                    })
-                    .catch(e => {
-                        console.log("Reader failed", e);
-                        modalBody.innerHTML = article.fullText;
-                    });
-            }
+            // WORDPRESS READER LOGIC
+            modalBody.innerHTML += '<br><span class="reader-status">⚡ FETCHING FULL STORY...</span>';
+            const wpUrl = 'https://public-api.wordpress.com/rest/v1.1/readability?url=' + encodeURIComponent(article.link);
+            fetch(wpUrl).then(r => r.json()).then(data => {
+                if(data.content) modalBody.innerHTML = data.content; 
+                else modalBody.innerHTML = article.fullText + '<br><br><i>(Full text unavailable. Click button below.)</i>';
+            }).catch(e => modalBody.innerHTML = article.fullText);
+
             modal.style.display = "block";
             document.body.style.overflow = "hidden";
         }
@@ -319,7 +294,6 @@ html_content = """
 </html>
 """
 
-# ... (manifest and sw remain same)
 manifest_content = """{
   "name": "Game News",
   "short_name": "GameNews",
@@ -357,4 +331,4 @@ with open("manifest.json", "w", encoding="utf-8") as f:
 with open("sw.js", "w", encoding="utf-8") as f:
     f.write(sw_content)
 
-print("✅ Updated: Switched to WordPress Readability API")
+print("✅ Updated: No BlueSky + Strict 48h Filter + Deep Dig")
