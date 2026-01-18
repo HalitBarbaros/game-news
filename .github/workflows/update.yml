@@ -1,8 +1,8 @@
 name: Update Game News
 on:
-  workflow_dispatch:      # Allows manual click to run
+  workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *' # Runs automatically every 6 hours
+    - cron: '0 */6 * * *'
 
 permissions:
   contents: write
@@ -20,24 +20,18 @@ jobs:
           python-version: '3.9'
 
       - name: Install Libraries
-        run: pip install -r requirements.txt
+        run: pip install feedparser google-genai
 
       - name: Generate Website
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python build_site.py
 
-  - name: Commit and Push Changes
+      - name: Commit and Push Changes
         run: |
           git config --global user.name 'NewsBot'
           git config --global user.email 'bot@noreply.github.com'
-          
-          # 1. Stage and Commit the new file FIRST
           git add index.html
           git commit -m "Updated news content" || echo "No changes to commit"
-          
-          # 2. Pull the latest history (using rebase to smooth out the timeline)
           git pull origin main --rebase
-          
-          # 3. Push the result
           git push
