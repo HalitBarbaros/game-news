@@ -5,8 +5,10 @@ import os
 import datetime
 
 # 1. SETUP
-# We get the key from the Environment (GitHub Secrets) for security
 API_KEY = os.environ.get("GEMINI_API_KEY")
+if not API_KEY:
+    raise ValueError("❌ Error: GEMINI_API_KEY is missing from Secrets!")
+
 client = genai.Client(api_key=API_KEY)
 
 rss_feeds = [
@@ -15,7 +17,7 @@ rss_feeds = [
     "https://kotaku.com/rss",
 ]
 
-# 2. HTML TEMPLATE (Modern, Dark Mode, Arabic RTL)
+# 2. HTML TEMPLATE
 html_template = """
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
@@ -71,26 +73,35 @@ def get_translation(title, summary):
     Output JSON: {{ "headline": "...", "bullets": "<li>...</li><li>...</li>" }}
     """
     try:
+        # CHANGED: Using 'gemini-1.5-flash' which is more standard/stable
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-1.5-flash",
             contents=prompt,
             config=types.GenerateContentConfig(response_mime_type="application/json")
         )
         return response.parsed
-    except:
+    except Exception as e:
+        # CHANGED: Now prints the actual error to the logs
+        print(f"❌ Error Translating '{title}': {e}")
         return None
 
 def main():
     articles_html = ""
     processed_count = 0
     
-    # Process feeds
+    print("🚀 Starting News Fetcher...")
+
     for feed_url in rss_feeds:
+        print(f"📥 Checking Feed: {feed_url}")
         feed = feedparser.parse(feed_url)
-        source_name = feed.feed.title.split()[0] # e.g., "IGN" from "IGN News"
+        
+        # Handle source name safely
+        source_name = "News"
+        if hasattr(feed, 'feed') and hasattr(feed.feed, 'title'):
+             source_name = feed.feed.title.split()[0]
         
         for entry in feed.entries:
-            if processed_count >= 10: break # Limit to top 10 stories total
+            if processed_count >= 10: break 
             
             # Find Image
             image_url = "https://placehold.co/600x400/1e1e1e/FFF?text=Game+News"
@@ -101,11 +112,11 @@ def main():
             
             content = getattr(entry, 'summary', getattr(entry, 'description', ''))
             
-            # Call Gemini
-            print(f"Translating: {entry.title}...")
+            print(f"✨ Translating: {entry.title}...")
             trans = get_translation(entry.title, content)
             
             if trans:
+                print("   ✅ Success!")
                 articles_html += card_template.format(
                     image=image_url,
                     source=source_name,
@@ -114,6 +125,11 @@ def main():
                     link=entry.link
                 )
                 processed_count += 1
+            else:
+                print("   ⚠️ Skipped due to error.")
+
+    if processed_count == 0:
+        articles_html = "<h3 style='text-align:center;'>⚠️ Could not load news. Check GitHub Action Logs for API errors.</h3>"
 
     # Generate Final HTML
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M UTC")
