@@ -1,137 +1,141 @@
-import feedparser
-import datetime
+# THIS SCRIPT NOW JUST INSTALLS THE LIVE DASHBOARD
+# The actual news fetching happens in your browser (JavaScript)
+import os
 
-# 1. SOURCES (Fastest "Twitter-style" news feeds)
-rss_feeds = [
-    "https://gematsu.com/feed",             # The fastest breaking news site (Japanese/Global)
-    "https://www.vg247.com/feed",           # Very fast leaks and news
-    "https://www.eurogamer.net/feed",       # Reliable major news
-    "https://feeds.ign.com/ign/news",       # Big headlines
-    "https://www.gamespot.com/feeds/news/"  # Big reviews/news
-]
-
-# 2. CONFIGURATION
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
-}
-
-# 3. HTML TEMPLATE
-html_template = """
+html_content = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Global Game News</title>
+    <title>Live Game News</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
         :root { --bg: #0f172a; --card-bg: #1e293b; --text: #f1f5f9; --accent: #38bdf8; --date: #94a3b8; }
         body { background-color: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; margin: 0; padding: 20px; }
         .container { max-width: 900px; margin: 0 auto; }
         
-        header { text-align: center; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 1px solid #334155; }
-        h1 { margin: 0; font-size: 2.5rem; background: linear-gradient(90deg, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .timestamp { color: var(--date); font-size: 0.9rem; margin-top: 10px; }
+        header { text-align: center; margin-bottom: 30px; border-bottom: 1px solid #334155; padding-bottom: 20px; }
+        h1 { margin: 0; font-size: 2rem; color: #38bdf8; }
+        .subtitle { color: var(--date); font-size: 0.9rem; margin-top: 5px; }
         
-        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+        #loading { text-align: center; font-size: 1.2rem; color: #fbbf24; margin-top: 50px; }
         
-        .card { background: var(--card-bg); border-radius: 12px; overflow: hidden; border: 1px solid #334155; transition: transform 0.2s; display: flex; flex-direction: column; }
-        .card:hover { transform: translateY(-5px); border-color: var(--accent); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; opacity: 0; transition: opacity 0.5s; }
+        .grid.loaded { opacity: 1; }
+        
+        .card { background: var(--card-bg); border-radius: 12px; overflow: hidden; border: 1px solid #334155; display: flex; flex-direction: column; }
+        .card:hover { border-color: var(--accent); transform: translateY(-3px); transition: 0.2s; }
         
         .card img { width: 100%; height: 160px; object-fit: cover; background: #000; }
+        .content { padding: 15px; flex-grow: 1; display: flex; flex-direction: column; }
+        .source { color: var(--accent); font-size: 0.75rem; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; }
+        h2 { font-size: 1.1rem; margin: 0 0 10px 0; line-height: 1.4; }
+        p { font-size: 0.85rem; color: #cbd5e1; flex-grow: 1; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
         
-        .content { padding: 20px; flex-grow: 1; display: flex; flex-direction: column; }
-        .source-tag { display: inline-block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-bottom: 8px; font-weight: bold; }
-        
-        h2 { margin: 0 0 10px 0; font-size: 1.1rem; line-height: 1.4; }
-        p { font-size: 0.9rem; color: #cbd5e1; line-height: 1.5; flex-grow: 1; margin-bottom: 20px; }
-        
-        a.btn { display: block; text-align: center; background: var(--accent); color: #0f172a; text-decoration: none; padding: 10px; border-radius: 6px; font-weight: bold; margin-top: auto; }
-        a.btn:hover { background: #7dd3fc; }
+        .date-tag { font-size: 0.7rem; color: #64748b; margin-top: 10px; text-align: right; }
+        a { text-decoration: none; color: inherit; display: block; height: 100%; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🌍 Global Game News</h1>
-            <div class="timestamp">Last Updated: {date}</div>
-        </header>
+
+<div class="container">
+    <header>
+        <h1>⚡ Live Game News</h1>
+        <div class="subtitle">Updates automatically every time you refresh</div>
+    </header>
+
+    <div id="loading">Connecting to News Feeds...</div>
+    <div id="news-grid" class="grid"></div>
+</div>
+
+<script>
+    // 1. LIST OF FEEDS (Gematsu & VG247 are fastest for 'Twitter-like' news)
+    const feeds = [
+        { name: "Gematsu", url: "https://gematsu.com/feed" },
+        { name: "VG247", url: "https://www.vg247.com/feed" },
+        { name: "Eurogamer", url: "https://www.eurogamer.net/feed" },
+        { name: "IGN", url: "https://feeds.ign.com/ign/news" },
+        { name: "GameSpot", url: "https://www.gamespot.com/feeds/news/" }
+    ];
+
+    const grid = document.getElementById('news-grid');
+    const loading = document.getElementById('loading');
+    let allArticles = [];
+    let completedFeeds = 0;
+
+    // 2. FETCH FUNCTION (Runs in Browser)
+    feeds.forEach(source => {
+        // We use rss2json to bypass CORS blocks
+        const proxyUrl = 'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(source.url);
+
+        fetch(proxyUrl)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    data.items.slice(0, 4).forEach(item => { // Get top 4 from each
+                        allArticles.push({
+                            title: item.title,
+                            link: item.link,
+                            image: item.enclosure?.link || item.thumbnail || "https://placehold.co/600x400/1e293b/FFF?text=" + source.name,
+                            summary: item.description.replace(/<[^>]*>?/gm, '').substring(0, 150) + "...",
+                            source: source.name,
+                            date: new Date(item.pubDate)
+                        });
+                    });
+                }
+            })
+            .catch(err => console.log('Error fetching ' + source.name, err))
+            .finally(() => {
+                completedFeeds++;
+                if (completedFeeds === feeds.length) {
+                    renderNews();
+                }
+            });
+    });
+
+    function renderNews() {
+        // Sort by Newest First
+        allArticles.sort((a, b) => b.date - a.date);
+
+        loading.style.display = 'none';
+        grid.innerHTML = '';
         
-        <div class="grid">
-            {articles}
-        </div>
-    </div>
+        allArticles.forEach(article => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = `
+                <a href="${article.link}" target="_blank">
+                    <img src="${article.image}" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=News'">
+                    <div class="content">
+                        <div class="source">${article.source}</div>
+                        <h2>${article.title}</h2>
+                        <p>${article.summary}</p>
+                        <div class="date-tag">${timeAgo(article.date)}</div>
+                    </div>
+                </a>
+            `;
+            grid.appendChild(card);
+        });
+        
+        grid.classList.add('loaded');
+    }
+
+    function timeAgo(date) {
+        const seconds = Math.floor((new Date() - date) / 1000);
+        let interval = seconds / 3600;
+        if (interval > 1) return Math.floor(interval) + " hours ago";
+        interval = seconds / 60;
+        if (interval > 1) return Math.floor(interval) + " minutes ago";
+        return "Just now";
+    }
+</script>
+
 </body>
 </html>
 """
 
-card_template = """
-<div class="card">
-    <img src="{image}" onerror="this.src='https://placehold.co/600x400/1e293b/FFF?text=Game+News'">
-    <div class="content">
-        <span class="source-tag">{source}</span>
-        <h2>{title}</h2>
-        <p>{summary}</p>
-        <a href="{link}" class="btn" target="_blank">Read More</a>
-    </div>
-</div>
-"""
+with open("index.html", "w", encoding="utf-8") as f:
+    f.write(html_content)
 
-def clean_summary(html_summary):
-    from re import sub
-    text = sub('<[^<]+?>', '', html_summary)
-    return text[:150] + "..." if len(text) > 150 else text
-
-def main():
-    articles_html = ""
-    total_articles = 0
-    
-    print("🚀 Starting Fetcher...")
-
-    for feed_url in rss_feeds:
-        try:
-            # Simple Source Namer
-            source_name = "News"
-            if "ign" in feed_url: source_name = "IGN"
-            elif "eurogamer" in feed_url: source_name = "Eurogamer"
-            elif "gamespot" in feed_url: source_name = "GameSpot"
-            elif "gematsu" in feed_url: source_name = "Gematsu"
-            elif "vg247" in feed_url: source_name = "VG247"
-
-            print(f"📥 Fetching: {source_name}...")
-            feed = feedparser.parse(feed_url, request_headers=HEADERS)
-            
-            # Get top 3 stories from each to keep it fast
-            for entry in feed.entries[:3]:
-                
-                image_url = "https://placehold.co/600x400/1e293b/FFF?text=" + source_name
-                if 'media_content' in entry: image_url = entry.media_content[0]['url']
-                elif 'media_thumbnail' in entry: image_url = entry.media_thumbnail[0]['url']
-                elif 'links' in entry:
-                    for l in entry.links:
-                        if l['type'].startswith('image'): image_url = l['href']; break
-                
-                raw_summary = getattr(entry, 'summary', getattr(entry, 'description', ''))
-                clean_text = clean_summary(raw_summary)
-
-                articles_html += card_template.format(
-                    image=image_url,
-                    source=source_name,
-                    title=entry.title,
-                    summary=clean_text,
-                    link=entry.link
-                )
-                total_articles += 1
-                
-        except Exception as e:
-            print(f"⚠️ Error fetching {feed_url}: {e}")
-
-    now = datetime.datetime.now().strftime("%B %d, %H:%M UTC")
-    final_html = html_template.format(date=now, articles=articles_html)
-    
-    with open("index.html", "w", encoding="utf-8") as f:
-        f.write(final_html)
-
-if __name__ == "__main__":
-    main()
+print("✅ Live Dashboard Installed.")
