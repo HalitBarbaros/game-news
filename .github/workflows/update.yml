@@ -27,11 +27,17 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python build_site.py
 
-      - name: Commit and Push Changes
+  - name: Commit and Push Changes
         run: |
           git config --global user.name 'NewsBot'
           git config --global user.email 'bot@noreply.github.com'
-          git pull origin main --no-edit
+          
+          # 1. Stage and Commit the new file FIRST
           git add index.html
-          git commit -m "Updated news content" || exit 0
+          git commit -m "Updated news content" || echo "No changes to commit"
+          
+          # 2. Pull the latest history (using rebase to smooth out the timeline)
+          git pull origin main --rebase
+          
+          # 3. Push the result
           git push
